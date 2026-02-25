@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eigen · Role Intake Tool</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #18181f;
+    --border: #2a2a35;
+    --border-light: #33333f;
+    --accent: #6c8fff;
+    --accent2: #a78bfa;
+    --text: #e8e8f0;
+    --text-muted: #7a7a90;
+    --text-dim: #4a4a60;
+    --green: #4ade80;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'DM Sans', sans-serif; font-size: 14px;
+    min-height: 100vh; line-height: 1.6;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(108,143,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(108,143,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px; pointer-events: none; z-index: 0;
+  }
+
+  /* Setup Screen */
+  #setupScreen {
+    display: none; position: fixed; inset: 0;
+    background: var(--bg); z-index: 100;
+    align-items: center; justify-content: center; padding: 24px;
+  }
+  .setup-box { max-width: 420px; width: 100%; }
+  #mainApp { display: none; }
+
+  .api-bar {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 8px 24px; display: flex; align-items: center;
+    justify-content: flex-end; gap: 12px; position: relative; z-index: 1;
+  }
+  .api-bar-label {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .btn-small {
+    background: transparent; border: 1px solid var(--border);
+    border-radius: 5px; color: var(--text-dim); cursor: pointer;
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    letter-spacing: 0.05em; padding: 4px 10px; text-transform: uppercase;
+    transition: all 0.15s;
+  }
+  .btn-small:hover { color: var(--text-muted); border-color: var(--border-light); }
+
+  .container {
+    position: relative; z-index: 1;
+    max-width: 820px; margin: 0 auto; padding: 48px 24px 80px;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .logo-mark {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500;
+    color: white; letter-spacing: -0.5px;
+  }
+  .logo-text {
+    font-family: 'DM Mono', monospace; font-size: 13px;
+    color: var(--text-muted); letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  h1 { font-size: 26px; font-weight: 400; letter-spacing: -0.5px; margin-bottom: 8px; }
+  .subtitle { color: var(--text-muted); font-size: 14px; font-weight: 300; margin-bottom: 40px; }
+
+  .form-grid { display: grid; gap: 20px; margin-bottom: 24px; }
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  label {
+    font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .required { color: var(--accent); font-size: 9px; }
+  label .hint {
+    font-family: 'DM Sans', sans-serif; font-size: 11px; text-transform: none;
+    letter-spacing: 0; color: var(--text-dim); font-weight: 300; font-style: italic;
+  }
+  textarea, input[type="text"], select {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13.5px;
+    font-weight: 300; line-height: 1.6; padding: 14px 16px; resize: vertical;
+    transition: border-color 0.15s, box-shadow 0.15s; width: 100%; outline: none;
+  }
+  textarea:focus, input:focus, select:focus {
+    border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,143,255,0.08);
+  }
+  textarea::placeholder, input::placeholder { color: var(--text-dim); font-style: italic; }
+  textarea { min-height: 120px; }
+  textarea.tall { min-height: 160px; }
+  select option { background: var(--surface2); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .divider { height: 1px; background: var(--border); margin: 8px 0 4px; opacity: 0.5; }
+  .section-label {
+    font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text-dim); margin-bottom: 16px; margin-top: 8px;
+  }
+
+  .btn-generate {
+    width: 100%; padding: 16px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none; border-radius: 8px; color: white;
+    font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500;
+    letter-spacing: 0.05em; cursor: pointer; transition: opacity 0.15s, transform 0.1s;
+  }
+  .btn-generate:hover { opacity: 0.9; }
+  .btn-generate:active { transform: scale(0.99); }
+  .btn-generate:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-inner { display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .spinner {
+    width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; display: none;
+  }
+  .spinner.active { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .error-box {
+    background: #1a0f0f; border: 1px solid #3a1f1f; border-radius: 8px;
+    padding: 16px 20px; color: #f87171; font-size: 13px; margin-top: 16px; display: none;
+  }
+  .error-box.visible { display: block; }
+
+  /* Output */
+  .output-section { margin-top: 32px; display: none; }
+  .output-section.visible { display: block; }
+  .output-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;
+  }
+  .output-label {
+    font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--green); display: flex; align-items: center; gap: 6px;
+  }
+  .output-label::before {
+    content: ''; width: 6px; height: 6px; background: var(--green);
+    border-radius: 50%; animation: pulse 2s ease infinite;
+  }
+
+  /* Tab switcher */
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab {
+    padding: 8px 20px; border-radius: 6px; cursor: pointer;
+    font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.06em;
+    text-transform: uppercase; border: 1px solid var(--border);
+    background: transparent; color: var(--text-dim); transition: all 0.15s;
+  }
+  .tab:hover { color: var(--text-muted); border-color: var(--border-light); }
+  .tab.active {
+    background: var(--surface2); border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Doc preview card */
+  .doc-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+  }
+  .doc-card-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .doc-card-title {
+    font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500;
+    letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted);
+  }
+  .action-btns { display: flex; gap: 8px; }
+  .btn-action {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text-muted); cursor: pointer;
+    font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.06em;
+    padding: 6px 12px; text-transform: uppercase; transition: all 0.15s;
+  }
+  .btn-action:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-action.success { border-color: var(--green); color: var(--green); }
+
+  .doc-body {
+    padding: 28px 32px;
+    font-family: 'DM Sans', sans-serif; font-size: 13.5px;
+    font-weight: 300; line-height: 1.8; color: var(--text);
+    white-space: pre-wrap; max-height: 600px; overflow-y: auto;
+  }
+  .doc-body::-webkit-scrollbar { width: 4px; }
+  .doc-body::-webkit-scrollbar-track { background: transparent; }
+  .doc-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .bottom-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .btn-secondary {
+    flex: 1; padding: 11px; background: transparent;
+    border: 1px solid var(--border); border-radius: 7px; color: var(--text-muted);
+    cursor: pointer; font-family: 'DM Mono', monospace; font-size: 11px;
+    letter-spacing: 0.05em; text-transform: uppercase; transition: all 0.15s;
+  }
+  .btn-secondary:hover { border-color: var(--border-light); color: var(--text); }
+
+  .gdocs-hint {
+    margin-top: 12px; padding: 12px 16px;
+    background: rgba(108,143,255,0.06); border: 1px solid rgba(108,143,255,0.15);
+    border-radius: 8px; font-size: 12px; color: var(--text-dim);
+    font-family: 'DM Mono', monospace; letter-spacing: 0.03em;
+  }
+  .gdocs-hint span { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- Setup Screen -->
+<div id="setupScreen">
+  <div class="setup-box">
+    <div class="logo" style="margin-bottom:32px;">
+      <div class="logo-mark">EL</div>
+      <span class="logo-text">Eigen Labs · Talent</span>
+    </div>
+    <h1 style="font-size:22px;font-weight:400;margin-bottom:8px;">One-time setup</h1>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:28px;font-weight:300;">Paste your Gemini API key to get started. Saved to your browser — you'll only need to do this once.</p>
+    <div class="field" style="margin-bottom:12px;">
+      <label>Gemini API Key</label>
+      <input type="password" id="apiKeyInput" placeholder="AIza..." style="font-family:'DM Mono',monospace;font-size:13px;" />
+    </div>
+    <p style="color:var(--text-dim);font-size:11px;margin-bottom:20px;font-style:italic;">
+      Get a free key at <a href="https://aistudio.google.com" target="_blank" style="color:var(--accent);text-decoration:none;">aistudio.google.com</a> → Get API Key
+    </p>
+    <div id="setupError" style="display:none;color:#f87171;font-size:12px;margin-bottom:16px;background:#1a0f0f;border:1px solid #3a1f1f;border-radius:6px;padding:10px 14px;"></div>
+    <button onclick="submitApiKey()" style="width:100%;padding:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:8px;color:white;font-family:'DM Mono',monospace;font-size:13px;cursor:pointer;letter-spacing:0.05em;">Save & Continue</button>
+  </div>
+</div>
+
+<!-- Main App -->
+<div id="mainApp">
+  <div class="api-bar">
+    <span class="api-bar-label">Gemini API connected</span>
+    <button class="btn-small" onclick="resetApiKey()">Change Key</button>
+  </div>
+
+  <div class="container">
+    <div class="logo">
+      <div class="logo-mark">EL</div>
+      <span class="logo-text">Eigen Labs · Talent</span>
+    </div>
+    <h1>Role Intake Tool</h1>
+    <p class="subtitle">Fill in 5 things. AI generates your intake form + JD draft — copy into Google Docs in one click.</p>
+
+    <div class="form-grid">
+      <div class="section-label">— Role Details</div>
+
+      <div class="two-col">
+        <div class="field">
+          <label>Role Title <span class="required">required</span></label>
+          <input type="text" id="roleTitle" placeholder="e.g. People Ops Generalist" />
+        </div>
+        <div class="field">
+          <label>Level <span class="required">required</span></label>
+          <select id="roleLevel">
+            <option value="" disabled selected>Select level</option>
+            <option>IC1</option><option>IC2</option><option>IC3</option>
+            <option>IC4</option><option>IC5</option><option>Manager</option>
+            <option>Senior Manager</option><option>Director</option><option>VP</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Location <span class="required">required</span></label>
+        <input type="text" id="location" placeholder="e.g. Seattle (in-office), Remote, Hybrid - NYC" />
+      </div>
+
+      <div class="divider"></div>
+      <div class="section-label">— The Role</div>
+
+      <div class="field">
+        <label>What Will They Own <span class="required">required</span></label>
+        <textarea id="ownership" class="tall" placeholder="Bullet points are fine. What are the core areas this person will own? What does their day-to-day look like?"></textarea>
+      </div>
+
+      <div class="field">
+        <label>Why Are We Hiring Now <span class="required">required</span></label>
+        <textarea id="whyNow" placeholder="Backfill? New function? What slows down or breaks if we don't hire?"></textarea>
+      </div>
+
+      <div class="field">
+        <label>What Makes This Role Exciting <span class="required">required</span></label>
+        <textarea id="excitement" placeholder="Elevator pitch for a strong candidate. How does this role evolve? What's the impact?"></textarea>
+      </div>
+    </div>
+
+    <button class="btn-generate" id="generateBtn" onclick="generate()">
+      <div class="btn-inner">
+        <div class="spinner" id="spinner"></div>
+        <span id="btnText">Generate Intake Form + JD</span>
+      </div>
+    </button>
+
+    <div class="error-box" id="errorBox"></div>
+
+    <div class="output-section" id="outputSection">
+      <div class="output-header">
+        <div class="output-label">Ready</div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('intake', this)">📋 Intake Form</button>
+        <button class="tab" onclick="switchTab('jd', this)">📄 Job Description</button>
+      </div>
+
+      <div class="tab-content active" id="tab-intake">
+        <div class="doc-card">
+          <div class="doc-card-header">
+            <span class="doc-card-title">Intake Form</span>
+            <div class="action-btns">
+              <button class="btn-action" id="copyIntakeBtn" onclick="copyDoc('intake')">Copy to Clipboard</button>
+            </div>
+          </div>
+          <div class="doc-body" id="intakeBody"></div>
+        </div>
+        <div class="gdocs-hint">
+          → Copy → open a <span>New Google Doc</span> → Cmd+V to paste. Google Docs auto-integration coming soon.
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-jd">
+        <div class="doc-card">
+          <div class="doc-card-header">
+            <span class="doc-card-title">Job Description</span>
+            <div class="action-btns">
+              <button class="btn-action" id="copyJdBtn" onclick="copyDoc('jd')">Copy to Clipboard</button>
+            </div>
+          </div>
+          <div class="doc-body" id="jdBody"></div>
+        </div>
+        <div class="gdocs-hint">
+          → Copy → open a <span>New Google Doc</span> → Cmd+V to paste. Google Docs auto-integration coming soon.
+        </div>
+      </div>
+
+      <div class="bottom-actions">
+        <button class="btn-secondary" onclick="generate()">↺ Regenerate</button>
+        <button class="btn-secondary" onclick="clearForm()">→ New Role</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── API Key ──────────────────────────────────────────
+function getApiKey() { return localStorage.getItem('gemini_api_key'); }
+function saveApiKey(k) { localStorage.setItem('gemini_api_key', k); }
+function clearApiKey() { localStorage.removeItem('gemini_api_key'); }
+
+function showSetup() {
+  document.getElementById('setupScreen').style.display = 'flex';
+  document.getElementById('mainApp').style.display = 'none';
+}
+function showApp() {
+  document.getElementById('setupScreen').style.display = 'none';
+  document.getElementById('mainApp').style.display = 'block';
+}
+function submitApiKey() {
+  const k = document.getElementById('apiKeyInput').value.trim();
+  const err = document.getElementById('setupError');
+  if (!k.startsWith('AIza')) {
+    err.textContent = 'That doesn\'t look right — Gemini API keys start with "AIza".';
+    err.style.display = 'block'; return;
+  }
+  saveApiKey(k); showApp();
+}
+function resetApiKey() {
+  if (confirm('Remove your saved API key?')) { clearApiKey(); showSetup(); }
+}
+window.addEventListener('DOMContentLoaded', () => {
+  getApiKey() ? showApp() : showSetup();
+  document.getElementById('apiKeyInput').addEventListener('keydown', e => { if (e.key === 'Enter') submitApiKey(); });
+});
+
+// ── Stored output ────────────────────────────────────
+let intakeText = '';
+let jdText = '';
+
+// ── Tabs ─────────────────────────────────────────────
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ── Generate ─────────────────────────────────────────
+async function generate() {
+  const apiKey = getApiKey();
+  if (!apiKey) { showSetup(); return; }
+
+  const roleTitle   = document.getElementById('roleTitle').value.trim();
+  const roleLevel   = document.getElementById('roleLevel').value;
+  const location    = document.getElementById('location').value.trim();
+  const ownership   = document.getElementById('ownership').value.trim();
+  const whyNow      = document.getElementById('whyNow').value.trim();
+  const excitement  = document.getElementById('excitement').value.trim();
+
+  const errorBox = document.getElementById('errorBox');
+  errorBox.classList.remove('visible');
+
+  if (!roleTitle || !roleLevel || !location || !ownership || !whyNow || !excitement) {
+    errorBox.textContent = 'Please fill in all fields.';
+    errorBox.classList.add('visible'); return;
+  }
+
+  const btn = document.getElementById('generateBtn');
+  const spinner = document.getElementById('spinner');
+  const btnText = document.getElementById('btnText');
+  const outputSection = document.getElementById('outputSection');
+
+  btn.disabled = true;
+  spinner.classList.add('active');
+  btnText.textContent = 'Generating...';
+
+  const COMPETENCIES = `
+EIGEN LABS CORE COMPETENCIES (use ONLY these — exact names and questions)
+
+1. Own & Deliver (Ownership)
+   Q1: Walk me through a project you owned end-to-end. How did you ensure it was successful?
+   Q2: Tell me about a time when you took on something significant outside your area of responsibility. Why was that important, and what was the impact?
+   Q3: Tell me about a time you worked to improve the quality of a product/service already seen as good enough.
+
+2. Go All In (Insist on the Highest Standards)
+   Q1: Walk me through a project you owned end-to-end. How did you ensure it was successful?
+   Q2: Tell me about a time when you took on something significant outside your area of responsibility. Why was that important, and what was the impact?
+   Q3: Tell me about a time you worked to improve the quality of a product/service already seen as good enough.
+
+3. Build Enduring Trust (Earn Trust & Be Bold)
+   Q1: Tell me about a time you improved a product, system, or process that was already performing well. What drove you to make it better, and what was the outcome?
+   Q2: Tell me about a time you missed a target. What did you learn, and how did you adjust your approach to ensure better results next time?
+   Q3: Tell me about a time you saw a process or deliverable that didn't meet your standards. What did you do? Did he or she respond?
+
+4. Think First Principles (Navigating Ambiguity)
+   Q1: Tell me about a time you had to communicate a big change in direction for which you anticipated people would have a lot of concerns. How did you handle questions and/or resistance? Were you able to get people comfortable with the change?
+   Q2: Tell me about a piece of direct feedback you recently gave to a colleague. How did he or she respond?
+   Q3: Tell me about a time you disagreed with a project direction but ultimately went forward as company planned.
+
+5. Iterate Rapidly (Learn & Be Curious)
+   Q1: Tell me about a time you taught or shared something that unlocked progress for others.
+   Q2: Tell me about feedback you've received that was hard to hear. How did you respond?
+   Q3: Give me an example of when your curiosity uncovered a better way of doing things.
+
+INTERVIEW STRUCTURE RULES:
+- HM always covers Own & Deliver (Ownership) — pick the best Q for this role
+- Each subsequent interviewer covers one different competency
+- Pick the single best question from that competency's Q1/Q2/Q3 and quote it EXACTLY
+`;
+
+  const intakePrompt = `You are a senior talent partner at Eigen Labs. A hiring manager submitted some initial notes — treat these as a starting point, not a complete spec.
+
+Your job: use the title, level, and context to fill gaps and produce a comprehensive intake form. Draw on your knowledge of how this function works at 50-100 person tech startups. Don't echo the HM's input back — expand it and make it complete.
+
+Also: silently fix any typos or grammatical errors in the HM's input before using it.
+
+Role Title: ${roleTitle}
+Level: ${roleLevel}
+Location: ${location}
+HM's notes on what they'll own (starting point only): ${ownership}
+Why we're hiring now: ${whyNow}
+What makes it exciting: ${excitement}
+
+About Eigen Labs: 60-person crypto/AI startup building EigenCloud and EigenLayer — verifiable computing infrastructure. Backed by a16z. Fast-growing developer ecosystem. High-trust, high-ownership culture.
+
+${COMPETENCIES}
+
+Respond ONLY with valid JSON, no markdown, no code fences:
+{
+  "expandedOwnership": ["Fully fleshed-out ownership area 1 — go beyond what HM listed", "area 2", "area 3", "area 4", "area 5", "area 6"],
+  "mustHaveSkills": [
+    "1. [Skill name]: [1-2 sentences on what good looks like for this specific role/level]",
+    "2. [Skill name]: [description]",
+    "3. [Skill name]: [description]",
+    "4. [Skill name]: [description]",
+    "5. [Skill name]: [description]"
+  ],
+  "coreCompetencies": ["3 competency names from the list above — exact names only"],
+  "internalBusinessCase": "2-3 sentences. Why does Eigen need this now? What breaks if we don't hire?",
+  "elevatorPitch": "3-4 sentences. What's the real opportunity? How will this role evolve as Eigen scales?",
+  "interviewStructure": [
+    { "stage": "Recruiter Screen (Danielle)", "goal": "Culture fit, baseline experience, motivation for the move" },
+    { "stage": "HM Interview", "competency": "Own & Deliver (Ownership)", "question": "[most relevant Q1/Q2/Q3 from Own & Deliver for this role — quoted exactly]" },
+    { "stage": "Team Interview 1", "competency": "[exact competency name from list]", "question": "[exact question quoted from that competency]" },
+    { "stage": "Team Interview 2", "competency": "[exact competency name from list — different from above]", "question": "[exact question quoted from that competency]" },
+    { "stage": "Presentation / Work Trial", "goal": "[specific realistic 1-2 hour work trial for this role]" }
+  ]
+}`;
+
+  const jdPrompt = `You are a senior talent partner at Eigen Labs writing a job description. The hiring manager gave you some initial notes — your job is to use those as seeds and write a complete, compelling JD that reflects what a ${roleTitle} at ${roleLevel} actually does at a high-growth tech startup.
+
+Think about what the best JDs for this role at companies like Stripe, Linear, Notion, or Figma look like. Use that as your quality bar. Don't just echo the HM's bullet points back — expand them into a full picture of the role.
+
+Role Title: ${roleTitle}
+Level: ${roleLevel}
+Location: ${location}
+HM's notes on ownership: ${ownership}
+Why we're hiring: ${whyNow}
+What makes it exciting: ${excitement}
+
+Respond ONLY with valid JSON, no markdown, no code fences:
+{
+  "theRole": "2-3 paragraphs. Specific and compelling — what is this person's mandate at Eigen? What impact will they have? What's the scope? Write for a strong candidate who has options.",
+  "whatYouWillDo": [
+    "Ownership area title: Full description of what they'll do, why it matters, and what success looks like — go beyond the HM's notes and include what a complete ${roleTitle} at this level typically owns",
+    "area 2: description",
+    "area 3: description",
+    "area 4: description",
+    "area 5: description",
+    "area 6: description"
+  ],
+  "whatYouWillBring": [
+    "Years of experience + specific context on why it matters at Eigen",
+    "Technical or functional skill requirement with detail",
+    "Soft skill or judgment requirement with context",
+    "Growth mindset or ownership requirement"
+  ],
+  "salaryRange": "Suggested USD range for ${roleLevel} in ${location} at a 60-person crypto/AI startup backed by a16z — be specific, e.g. $110,000–$140,000"
+}`;
+
+  try {
+    const [intakeRaw, jdRaw] = await Promise.all([
+      callGemini(intakePrompt, apiKey),
+      callGemini(jdPrompt, apiKey)
+    ]);
+
+    let intake, jd;
+    try { intake = JSON.parse(intakeRaw); } catch(e) { throw new Error('Could not parse intake response. Please try again.'); }
+    try { jd = JSON.parse(jdRaw); } catch(e) { throw new Error('Could not parse JD response. Please try again.'); }
+
+    intakeText = buildIntakeText(intake, { roleTitle, roleLevel, location, ownership, whyNow });
+    jdText = buildJdText(jd, { roleTitle, roleLevel, location });
+
+    document.getElementById('intakeBody').textContent = intakeText;
+    document.getElementById('jdBody').textContent = jdText;
+
+    outputSection.classList.add('visible');
+    outputSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch(err) {
+    errorBox.textContent = err.message;
+    errorBox.classList.add('visible');
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('active');
+    btnText.textContent = 'Generate Intake Form + JD';
+  }
+}
+
+async function callGemini(prompt, apiKey) {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 3000 }
+      })
+    }
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    if (response.status === 400 || response.status === 403) throw new Error('Invalid API key. Click "Change Key" to update.');
+    throw new Error(err?.error?.message || `API error: ${response.status}`);
+  }
+  const data = await response.json();
+  let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!text) throw new Error('No response returned. Please try again.');
+  return text.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+}
+
+// ── Build intake text ─────────────────────────────────
+function buildIntakeText(d, inputs) {
+  const date = new Date().toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'});
+  return `EIGEN LABS — ROLE INTAKE FORM
+Generated ${date}
+────────────────────────────────────────
+
+WHO, WHAT & WHERE
+
+Role Title:   ${inputs.roleTitle}
+Level:        ${inputs.roleLevel}
+Location:     ${inputs.location}
+Hiring Manager: [Add name]
+Team:         [Add team]
+
+────────────────────────────────────────
+
+WHY WE'RE HIRING
+
+Business Case:
+${d.internalBusinessCase}
+
+Elevator Pitch (for candidates):
+${d.elevatorPitch}
+
+────────────────────────────────────────
+
+WHAT THEY WILL OWN
+
+${Array.isArray(d.expandedOwnership) ? d.expandedOwnership.map(o => `• ${o}`).join('\n') : inputs.ownership}
+
+────────────────────────────────────────
+
+TOP 5 MUST-HAVE SKILLS
+
+${d.mustHaveSkills.join('\n')}
+
+────────────────────────────────────────
+
+CORE COMPETENCIES
+
+${d.coreCompetencies.map((c,i) => `${i+1}. ${c}`).join('\n')}
+
+────────────────────────────────────────
+
+INTERVIEW STRUCTURE
+
+${d.interviewStructure.map(s => {
+    if (s.competency && s.question) {
+      return s.stage + '\nCompetency: ' + s.competency + '\nQuestion: "' + s.question + '"';
+    }
+    return s.stage + '\n→ ' + s.goal;
+  }).join('\n\n')}
+
+────────────────────────────────────────
+
+NOTES / OPEN ITEMS
+
+[ Add preferred backgrounds, referrals, or anything else the team should know ]
+
+────────────────────────────────────────
+Eigen Labs Talent · Review and edit before sharing with hiring committee`;
+}
+
+// ── Build JD text ─────────────────────────────────────
+function buildJdText(d, inputs) {
+  const date = new Date().toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'});
+  return `Eigen Labs is building the infrastructure for a more trustworthy internet.
+Today's digital world runs on trust-me promises: "Trust that this AI model is giving you unbiased results." "Trust that this platform isn't manipulating your feed." "Trust that this service will honor its commitments." These trust assumptions create massive friction and limit what's possible online.
+EigenCloud changes this by making any digital service verifiable. Built on our EigenLayer protocol, which has attracted billions in economic security, EigenCloud lets developers build applications with mathematical trust guarantees instead of pinky promises.
+────────────────────────────────────────
+
+${inputs.roleTitle.toUpperCase()}
+${inputs.roleLevel} · ${inputs.location}
+
+────────────────────────────────────────
+
+THE ROLE
+
+${d.theRole}
+
+────────────────────────────────────────
+
+WHAT YOU WILL DO
+
+${d.whatYouWillDo.map(r => `• ${r}`).join('\n')}
+
+────────────────────────────────────────
+
+WHAT YOU WILL BRING
+
+${d.whatYouWillBring.map(r => `• ${r}`).join('\n')}
+
+────────────────────────────────────────
+
+COMPENSATION
+
+${d.salaryRange}
+
+In addition, Eigen Labs provides various employee benefits, including:
+
+────────────────────────────────────────
+
+BENEFITS
+
+• Competitive salary and equity (tokens and options)
+• Comprehensive insurance (medical/dental/vision)
+• Stipend for your ideal remote set-up
+• Flexible hours and a supportive remote environment
+• Unlimited vacation (and we really mean it!)
+• 401(k) retirement plan
+• Monthly wellness benefit
+• Yearly off-sites
+
+────────────────────────────────────────
+
+EQUAL OPPORTUNITY EMPLOYMENT
+
+We are an equal opportunity employer. We search for amazing people of diverse backgrounds, experiences, abilities, and perspectives. We take care of each other to create an inclusive work environment where we love to come to work every day.
+
+────────────────────────────────────────
+Draft generated ${date} · Review and edit before posting`;
+}
+
+// ── Copy ──────────────────────────────────────────────
+function copyDoc(type) {
+  const text = type === 'intake' ? intakeText : jdText;
+  const btnId = type === 'intake' ? 'copyIntakeBtn' : 'copyJdBtn';
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById(btnId);
+    btn.textContent = 'Copied ✓'; btn.classList.add('success');
+    setTimeout(() => { btn.textContent = 'Copy to Clipboard'; btn.classList.remove('success'); }, 2000);
+  });
+}
+
+// ── Clear ──────────────────────────────────────────────
+function clearForm() {
+  ['roleTitle','location','ownership','whyNow','excitement'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('roleLevel').value = '';
+  document.getElementById('outputSection').classList.remove('visible');
+  document.getElementById('errorBox').classList.remove('visible');
+  intakeText = ''; jdText = '';
+  document.getElementById('roleTitle').focus();
+}
+</script>
+</body>
+</html>
