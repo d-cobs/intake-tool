@@ -229,6 +229,8 @@ let gTokenClient = null;
 let intakeText = '';
 let jdText = '';
 let clarityText = '';
+let lastIntakeData = null;
+let lastInputs = null;
 
 // ── API Key ──────────────────────────────────────────
 function getApiKey() { return 'AIzaSyC8C5XKiGXTU1944VS15-c_CI3nwC86QJw'; }
@@ -451,6 +453,8 @@ Respond ONLY with valid JSON, no markdown, no code fences:
     intakeText = buildIntakeText(intake, { roleTitle, roleLevel, location, ownership });
     jdText = buildJdText(jd, { roleTitle, roleLevel, location });
     clarityText = buildClarityText(clarity, { roleTitle });
+    lastIntakeData = intake;
+    lastInputs = { roleTitle, roleLevel, location, ownership };
 
     document.getElementById('intakeBody').textContent = intakeText;
     document.getElementById('jdBody').textContent = jdText;
@@ -500,7 +504,7 @@ async function createGoogleDocs(roleTitle, roleLevel) {
 
   try {
     const [intakeUrl, jdUrl, clarityUrl] = await Promise.all([
-      createGoogleDoc(`Intake Form — ${roleTitle} (${roleLevel})`, intakeText),
+      createStructuredIntakeDoc(`Intake Form — ${roleTitle} (${roleLevel})`, lastIntakeData, lastInputs),
       createGoogleDoc(`JD Draft — ${roleTitle}`, jdText),
       createGoogleDoc(`Role Clarity — ${roleTitle}`, clarityText)
     ]);
@@ -530,6 +534,121 @@ async function createGoogleDoc(title, body) {
     headers: { 'Authorization': 'Bearer ' + gAccessToken, 'Content-Type': 'application/json' },
     body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: body } }] })
   });
+  return `https://docs.google.com/document/d/${docId}/edit`;
+}
+
+async function createStructuredIntakeDoc(title, intake, inputs) {
+  // Create blank doc
+  const createResp = await fetch('https://docs.googleapis.com/v1/documents', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + gAccessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title })
+  });
+  if (!createResp.ok) throw new Error('Could not create intake doc');
+  const doc = await createResp.json();
+  const docId = doc.documentId;
+
+  // Build requests array for structured formatting
+  const requests = [];
+  let idx = 1;
+
+  function insertText(text, bold, fontSize, idx) {
+    return [
+      { insertText: { location: { index: idx }, text } },
+      { updateTextStyle: {
+          range: { startIndex: idx, endIndex: idx + text.length },
+          textStyle: {
+            bold: bold || false,
+            fontSize: { magnitude: fontSize || 10, unit: 'PT' },
+            weightedFontFamily: { fontFamily: 'Arial' }
+          },
+          fields: 'bold,fontSize,weightedFontFamily'
+        }
+      }
+    ];
+  }
+
+  function insertParagraph(text, bold, fontSize) {
+    const reqs = insertText(text + '\n', bold, fontSize, idx);
+    idx += text.length + 1;
+    return reqs;
+  }
+
+  function insertRow(label, value) {
+    // label cell bold, value cell normal
+    const reqs = [];
+    const labelText = label;
+    const valueText = value || '';
+    reqs.push(...insertText(labelText, true, 9, idx));
+    idx += labelText.length;
+    reqs.push(...insertText('\t' + valueText + '\n', false, 9, idx));
+    idx += valueText.length + 2;
+    return reqs;
+  }
+
+  // Section: WHO, WHAT & WHERE
+  requests.push(...insertParagraph('WHO, WHAT & WHERE', true, 11));
+  requests.push(...insertRow('Role Title', inputs.roleTitle));
+  requests.push(...insertRow('Level', inputs.roleLevel));
+  requests.push(...insertRow('Location', inputs.location));
+  requests.push(...insertRow('Hiring Manager', ''));
+  requests.push(...insertRow('Team', ''));
+  requests.push(...insertRow('Link to JD', ''));
+  requests.push(...insertParagraph('', false, 9));
+
+  // Section: WHY
+  requests.push(...insertParagraph('WHY', true, 11));
+  requests.push(...insertRow('Internal Business Case', intake.internalBusinessCase || ''));
+  requests.push(...insertParagraph('', false, 9));
+  requests.push(...insertRow('What Will They Own', (intake.expandedOwnership || []).map(o => '• ' + o).join('\n')));
+  requests.push(...insertParagraph('', false, 9));
+  requests.push(...insertRow('Elevator Pitch', intake.elevatorPitch || ''));
+  requests.push(...insertParagraph('', false, 9));
+  requests.push(...insertRow('Preferred Backgrounds / Companies', ''));
+  requests.push(...insertRow('3 Referrals / Example Candidates', ''));
+  requests.push(...insertParagraph('', false, 9));
+
+  // Section: SKILLS & COMPETENCIES
+  requests.push(...insertParagraph('SKILLS & COMPETENCIES', true, 11));
+  requests.push(...insertRow('Top 5 Must-Have Skills', (intake.mustHaveSkills || []).join('\n')));
+  requests.push(...insertParagraph('', false, 9));
+  requests.push(...insertRow('Core Competencies', (intake.coreCompetencies || []).map((c,i) => (i+1) + '. ' + c).join('\n')));
+  requests.push(...insertParagraph('', false, 9));
+
+  // Section: HOW (Interview Structure)
+  requests.push(...insertParagraph('HOW', true, 11));
+
+  // Interview table header
+  const stages = intake.interviewStructure || [];
+  const headerLine = 'Stage\tWho\tGoal\tCompetency / Question\n';
+  requests.push(...insertText(headerLine, true, 9, idx));
+  idx += headerLine.length;
+
+  stages.forEach(s => {
+    let line = '';
+    if (s.stage === 'Recruiter Screen (Danielle)') {
+      line = s.stage + '\tRecruiter\t' + (s.goal || '') + '\t—\n';
+    } else if (s.competency && s.question) {
+      line = s.stage + '\tHiring Manager\tAssess ' + s.competency + '\t' + s.question + '\n';
+    } else {
+      line = s.stage + '\t\t' + (s.goal || '') + '\t\n';
+    }
+    requests.push(...insertText(line, false, 9, idx));
+    idx += line.length;
+  });
+
+  requests.push(...insertParagraph('', false, 9));
+  requests.push(...insertRow('Work Trial Prompt', (stages.find(s => s.stage && s.stage.includes('Work Trial')) || {}).goal || ''));
+  requests.push(...insertParagraph('', false, 9));
+  requests.push(...insertParagraph('Generated by Eigen Labs Talent Tool · Review before sharing', false, 8));
+
+  // Send all requests
+  await fetch(`https://docs.googleapis.com/v1/documents/${docId}:batchUpdate`, {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + gAccessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests })
+  });
+
   return `https://docs.google.com/document/d/${docId}/edit`;
 }
 
