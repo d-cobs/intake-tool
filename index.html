@@ -233,7 +233,7 @@ let lastIntakeData = null;
 let lastInputs = null;
 
 // ── API Key ──────────────────────────────────────────
-function getApiKey() { return 'AIzaSyD55g1NrMleaLAde4reTlutsWe5tC3QpFM'; }
+function getApiKey() { return 'AIzaSyDpUmjEJdXa8TA76620DAjZyZmEEyJlQ-s'; }
 function showApp() { document.getElementById('mainApp').style.display = 'block'; }
 
 // ── Google Auth ──────────────────────────────────────
@@ -486,9 +486,17 @@ async function callGemini(prompt, apiKey) {
     throw new Error(err?.error?.message || `API error: ${response.status}`);
   }
   const data = await response.json();
-  let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  // Gemini 2.5 may return multiple parts (thinking + response) — get the last text part
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  const textPart = parts.filter(p => p.text).pop();
+  let text = textPart?.text || '';
   if (!text) throw new Error('No response returned — please try again.');
-  return text.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+  // Strip markdown code fences and any preamble before the first {
+  text = text.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+  const jsonStart = text.indexOf('{');
+  const jsonEnd = text.lastIndexOf('}');
+  if (jsonStart > -1 && jsonEnd > -1) text = text.slice(jsonStart, jsonEnd + 1);
+  return text;
 }
 
 // ── Google Docs creation ──────────────────────────────
